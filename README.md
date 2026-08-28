@@ -15,9 +15,10 @@ WebSocket (Socket.io) を用いて、複数人で手札の解体・指名・状�
 
 ## 🛠️ 技術スタック (Tech Stack)
 
-- **Frontend**: React, Vite / Create React App, HTML5, CSS3
-- **Backend**: Node.js, Express, Socket.io
-- **Language**: JavaScript (ES6+)
+- **Frontend**: React, TypeScript, Vite
+- **Backend**: Python, FastAPI
+- **Communication**: WebSocket
+- **Development**: Docker / Docker Compose
 
 ---
 
@@ -27,13 +28,14 @@ WebSocket (Socket.io) を用いて、複数人で手札の解体・指名・状�
 bomb-game/
 ├── client/                 # フロントエンド (React)
 │   ├── src/
-│   │   ├── App.jsx         # メイン画面コンポーネント
+│   │   ├── App.tsx         # メイン画面コンポーネント
 │   │   ├── App.css         # スタイル定義
-│   │   └── main.jsx        # エントリーポイント
+│   │   └── main.tsx        # エントリーポイント
 │   └── package.json
-├── server/                 # バックエンド (Node.js + Socket.io)
-│   ├── server.js           # サーバー処理・ゲームロジック
-│   └── package.json
+├── server/                 # バックエンド (FastAPI + WebSocket)
+│   ├── main.py             # サーバー処理・ゲームロジック
+│   └── requirements.txt
+├── docker-compose.yml
 └── README.md
 ```
 
@@ -42,44 +44,35 @@ bomb-game/
 ## 🔧 セットアップと起動手順 (Getting Started)
 
 ### 前提条件
-- Node.js (v16.x 以上推奨)
-- npm または yarn
+- Docker / Docker Compose
 
 ---
 
-### 1. バックエンドの起動 (Server)
+### Docker Composeで起動
 
 ```bash
-# サーバーディレクトリに移動
-cd server
-
-# 依存パッケージのインストール
-npm install
-
-# サーバーの起動
-node server.js
+# プロジェクトルートで実行
+docker compose up --build
 ```
-* サーバーが `http://localhost:4000` で起動します。
+* フロントエンド: `http://localhost:5173`
+* WebSocket: `ws://localhost:8000/ws`
 
 ---
 
-### 2. フロントエンドの起動 (Client)
+### 個別に起動する場合
 
 新しいターミナルを開いて実行します。
 
 ```bash
-# クライアントディレクトリに移動
-cd client
+# バックエンド
+python -m venv .venv && source .venv/bin/activate
+pip install -r server/requirements.txt
+uvicorn main:app --app-dir server --reload --port 8000
 
-# 依存パッケージのインストール
-npm install
-
-# 開発サーバーの起動 (Viteの場合)
-npm run dev
-# または (Create React Appの場合)
-npm start
+# 別ターミナルでフロントエンド
+cd client && npm install && npm run dev
 ```
-* ブラウザで表示されたローカルURL（例: `http://localhost:5173`）にアクセスします。
+ブラウザで `http://localhost:5173` にアクセスします。
 
 ---
 

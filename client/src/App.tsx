@@ -1,14 +1,19 @@
-import React, { useState, useEffect } from "react";
-import { io } from "socket.io-client";
+import { useEffect, useRef, useState } from "react";
 import "./App.css";
 
-// バックエンドのサーバーアドレスに接続
-const socket = io("http://localhost:4000");
+type Card = { id: string; value: number; isCut: boolean };
+type Player = { name: string; hand: Card[] };
+type GameState = { players: Record<string, Player>; detonationDial: number; maxMistakes: number; gameStarted: boolean };
+type StateMessage = { type: "stateUpdate"; state: GameState; playerId?: string };
+const websocketUrl = import.meta.env.VITE_WS_URL || `${window.location.protocol === "https:" ? "wss" : "ws"}://${window.location.hostname}:8000/ws`;
 
 export default function App() {
+  const socket = useRef<WebSocket | null>(null);
+  const pendingMessages = useRef<string[]>([]);
   const [name, setName] = useState("");
+  const [playerId, setPlayerId] = useState("");
   const [joined, setJoined] = useState(false);
-  const [gameState, setGameState] = useState({
+  const [gameState, setGameState] = useState<GameState>({
     players: {},
     detonationDial: 0,
     maxMistakes: 3,
@@ -17,22 +22,36 @@ export default function App() {
   const [selectedDeclaredNum, setSelectedDeclaredNum] = useState(1);
 
   useEffect(() => {
-    // サーバーからの状態更新を受信
-    socket.on("stateUpdate", (state) => {
-      setGameState(state);
-    });
-
-    return () => socket.off("stateUpdate");
+    const connection = new WebSocket(websocketUrl);
+    socket.current = connection;
+    connection.onopen = () => {
+      pendingMessages.current.forEach((message) => connection.send(message));
+      pendingMessages.current = [];
+    };
+    connection.onmessage = (event) => {
+      const message = JSON.parse(event.data) as StateMessage;
+      if (message.type === "stateUpdate") {
+        setGameState(message.state);
+        if (message.playerId) setPlayerId(message.playerId);
+      }
+    };
+    return () => connection.close();
   }, []);
+
+  const send = (type: string, payload: Record<string, unknown> = {}) => {
+    const message = JSON.stringify({ type, ...payload });
+    if (socket.current?.readyState === WebSocket.OPEN) socket.current.send(message);
+    else pendingMessages.current.push(message);
+  };
 
   const handleJoin = () => {
     if (!name.trim()) return;
-    socket.emit("joinGame", name);
+    send("joinGame", { name: name.trim() });
     setJoined(true);
   };
 
   const handleCut = (targetId, cardIndex) => {
-    socket.emit("declareCut", {
+    send("declareCut", {
       targetId,
       cardIndex,
       declaredNumber: selectedDeclaredNum,
@@ -56,7 +75,17 @@ export default function App() {
     );
   }
 
-  const myHand = gameState.players[socket.id]?.hand || [];
+  const myHand = gameState.players[playerId]?.hand || [];
+  const allCards = Object.values(gameState.players).flatMap((player) => player.hand);
+  const numberStatuses = Array.from({ length: 12 }, (_, index) => {
+    const number = index + 1;
+    const cards = allCards.filter((card) => card.value === number);
+
+    return {
+      number,
+      isComplete: cards.length > 0 && cards.every((card) => card.isCut),
+    };
+  });
 
   return (
     <div className="container">
@@ -66,6 +95,25 @@ export default function App() {
           <div>起爆カウント: <strong>{gameState.detonationDial} / {gameState.maxMistakes}</strong></div>
         </div>
       </header>
+
+      <section className="number-board" aria-label="解除番号一覧">
+        <div className="number-board-heading">
+          <h2>解除番号</h2>
+          <span>1 - 12</span>
+        </div>
+        <div className="number-list">
+          {numberStatuses.map(({ number, isComplete }) => (
+            <div
+              key={number}
+              className={`number-tile ${isComplete ? "complete" : ""}`}
+              aria-label={`${number} ${isComplete ? "解除済み" : "未解除"}`}
+            >
+              <span className="number-value">{number}</span>
+              <span className="number-mark" aria-hidden="true">{isComplete ? "✓" : ""}</span>
+            </div>
+          ))}
+        </div>
+      </section>
 
       {!gameState.gameStarted && (
         <div className="start-banner">
